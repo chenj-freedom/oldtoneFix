@@ -17,21 +17,9 @@ import audio_denoise as denoise
 
 
 class PureFunctionTests(unittest.TestCase):
-    def test_build_filter_chain_uses_confirmed_narrow_notches(self):
+    def test_build_filter_chain_uses_arnndn_and_afftdn(self):
         self.assertTrue(hasattr(denoise, "build_filter_chain"))
-        self.assertEqual(
-            denoise.build_filter_chain("hum"),
-            ",".join(
-                (
-                    "highpass=f=28:p=2:r=f64",
-                    "bandreject=f=50.16:t=h:w=1.8:r=f64",
-                    "bandreject=f=150.49:t=h:w=3.5:r=f64",
-                )
-            ),
-        )
-
-    def test_build_filter_chain_broadband_uses_arnndn_and_afftdn(self):
-        chain = denoise.build_filter_chain("broadband")
+        chain = denoise.build_filter_chain()
         self.assertIn("highpass=f=28", chain)
         self.assertIn("arnndn=m=", chain)
         self.assertIn("mix=0.78", chain)
@@ -39,9 +27,26 @@ class PureFunctionTests(unittest.TestCase):
         self.assertIn("afftdn=", chain)
         self.assertIn("treble=", chain)
 
-    def test_build_filter_chain_rejects_unknown_mode(self):
-        with self.assertRaisesRegex(ValueError, "Unsupported mode"):
-            denoise.build_filter_chain("magic")
+    def test_build_filter_chain_applies_custom_tune(self):
+        tune = denoise.DenoiseTune(
+            highpass_hz=40,
+            rnnoise_mix=0.5,
+            afftdn_nr=20,
+            afftdn_nf=-45,
+            afftdn_nt="vinyl",
+            afftdn_tn=False,
+            treble_gain=-1,
+            treble_hz=8000,
+            treble_width=1,
+        )
+        chain = denoise.build_filter_chain(tune)
+        self.assertIn("highpass=f=40", chain)
+        self.assertIn("mix=0.5", chain)
+        self.assertIn("nr=20", chain)
+        self.assertIn("nf=-45", chain)
+        self.assertIn("nt=vinyl", chain)
+        self.assertIn("tn=0", chain)
+        self.assertIn("treble=g=-1:f=8000:w=1", chain)
 
     def test_find_audio_files_is_recursive_case_insensitive_and_excludes_output(self):
         self.assertTrue(hasattr(denoise, "find_audio_files"))
@@ -113,17 +118,8 @@ class PureFunctionTests(unittest.TestCase):
         self.assertIn(str(temporary_output), command)
         self.assertIn("-map_metadata", command)
         self.assertIn("-af", command)
-        self.assertIn(denoise.build_filter_chain("hum"), command)
+        self.assertIn(denoise.build_filter_chain(), command)
         self.assertEqual(command[-5:], ["-c:a", "libmp3lame", "-q:a", "2", str(temporary_output)])
-
-    def test_build_ffmpeg_command_passes_broadband_filter_chain(self):
-        command = denoise.build_ffmpeg_command(
-            "ffmpeg",
-            Path("C:/input.mp3"),
-            Path("C:/output.tmp.mp3"),
-            mode="broadband",
-        )
-        self.assertIn(denoise.build_filter_chain("broadband"), command)
 
     def test_build_ffmpeg_command_selects_wav_and_flac_codecs(self):
         cases = {
@@ -264,13 +260,71 @@ class CliTests(unittest.TestCase):
         arguments = denoise.parse_args(["-i", "input"])
         self.assertTrue(hasattr(arguments, "keep_existing"))
         self.assertFalse(arguments.keep_existing)
-        self.assertEqual(arguments.mode, "hum")
+        self.assertFalse(hasattr(arguments, "mode"))
+        defaults = denoise.DenoiseTune()
+        self.assertEqual(denoise.tune_from_args(arguments), defaults)
 
-    def test_parse_args_accepts_mode_short_and_long_options(self):
-        for option in ("-m", "--mode"):
-            with self.subTest(option=option):
-                arguments = denoise.parse_args(["-i", "input", option, "broadband"])
-                self.assertEqual(arguments.mode, "broadband")
+    def test_parse_args_accepts_tune_overrides(self):
+        arguments = denoise.parse_args(
+            [
+                "-i",
+                "input",
+                "--highpass-hz",
+                "40",
+                "--rnnoise-mix",
+                "0.6",
+                "--afftdn-nr",
+                "18",
+                "--afftdn-nf",
+                "-40",
+                "--afftdn-nt",
+                "vinyl",
+                "--no-afftdn-tn",
+                "--treble-gain",
+                "-1.5",
+                "--treble-hz",
+                "6500",
+                "--treble-width",
+                "0.8",
+            ]
+        )
+        self.assertEqual(
+            denoise.tune_from_args(arguments),
+            denoise.DenoiseTune(
+                highpass_hz=40,
+                rnnoise_mix=0.6,
+                afftdn_nr=18,
+                afftdn_nf=-40,
+                afftdn_nt="vinyl",
+                afftdn_tn=False,
+                treble_gain=-1.5,
+                treble_hz=6500,
+                treble_width=0.8,
+            ),
+        )
+
+    def test_help_documents_tune_parameter_ranges_and_effects(self):
+        buffer = io.StringIO()
+        with self.assertRaises(SystemExit), redirect_stdout(buffer):
+            denoise.parse_args(["-h"])
+        help_text = buffer.getvalue()
+        self.assertIn("tuning options", help_text)
+        for token in (
+            "--highpass-hz",
+            "--rnnoise-mix",
+            "--afftdn-nr",
+            "--afftdn-nf",
+            "--afftdn-nt",
+            "--afftdn-tn",
+            "--treble-gain",
+            "--treble-hz",
+            "--treble-width",
+            "Range",
+            "default",
+            "Lower:",
+            "Higher:",
+        ):
+            self.assertIn(token, help_text)
 
     def test_parse_args_accepts_keep_existing_short_and_long_options(self):
         for option in ("-k", "--keep-existing"):
@@ -408,17 +462,20 @@ class CliTests(unittest.TestCase):
 
 class DocumentationTests(unittest.TestCase):
     def test_readme_documents_command_formats_and_ffmpeg_requirement(self):
-        readme = ROOT / "README.md"
-        self.assertTrue(readme.exists())
-        content = readme.read_text(encoding="utf-8")
-        self.assertIn("python audio_denoise.py", content)
-        self.assertIn("FFmpeg", content)
-        self.assertIn("--keep-existing", content)
-        self.assertIn("--output", content)
-        self.assertIn("--help", content)
-        self.assertNotIn("--overwrite", content)
-        for suffix in (".mp3", ".wav", ".flac"):
-            self.assertIn(suffix, content)
+        for name in ("README.md", "README.en.md"):
+            with self.subTest(readme=name):
+                readme = ROOT / name
+                self.assertTrue(readme.exists())
+                content = readme.read_text(encoding="utf-8")
+                self.assertIn("python audio_denoise.py", content)
+                self.assertIn("FFmpeg", content)
+                self.assertIn("--keep-existing", content)
+                self.assertIn("--output", content)
+                self.assertIn("--help", content)
+                self.assertIn("--rnnoise-mix", content)
+                self.assertNotIn("--overwrite", content)
+                for suffix in (".mp3", ".wav", ".flac"):
+                    self.assertIn(suffix, content)
 
 
 if __name__ == "__main__":

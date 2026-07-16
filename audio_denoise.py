@@ -1,4 +1,4 @@
-"""Batch denoise for old recordings: narrowband hum or broadband floor noise."""
+"""Batch denoise for old recordings with continuous floor noise."""
 
 import argparse
 import os
@@ -11,9 +11,9 @@ from pathlib import Path
 
 
 SUPPORTED_SUFFIXES = {".mp3", ".wav", ".flac"}
-MODES = ("hum", "broadband")
 PROCESSED_MARKER = "_processed"
 DEFAULT_RNN_MODEL = Path(__file__).resolve().parent / "models" / "cb.rnnn"
+AFFTDN_NOISE_TYPES = ("white", "vinyl", "shellac")
 
 
 @dataclass(frozen=True)
@@ -22,39 +22,47 @@ class ProcessResult:
     detail: str = ""
 
 
+@dataclass(frozen=True)
+class DenoiseTune:
+    """Tunable denoise parameters. Defaults match the validated listening preset."""
+
+    highpass_hz: float = 28.0
+    rnnoise_mix: float = 0.78
+    afftdn_nr: float = 14.0
+    afftdn_nf: float = -50.0
+    afftdn_nt: str = "white"
+    afftdn_tn: bool = True
+    treble_gain: float = -2.5
+    treble_hz: float = 7000.0
+    treble_width: float = 0.6
+
+
 def ffmpeg_filter_path(path: Path) -> str:
     """Escape a filesystem path for use inside an FFmpeg filtergraph option."""
     text = str(path.resolve()).replace("\\", "/").replace(":", "\\:")
     return f"'{text}'"
 
 
-def build_filter_chain(
-    mode: str = "hum", model_path: Path | None = None
-) -> str:
-    """Return the FFmpeg filter graph for the selected denoise mode."""
-    if mode == "hum":
-        return ",".join(
+def build_filter_chain(tune: DenoiseTune | None = None) -> str:
+    """Return the FFmpeg filter graph for speech-aware floor-noise reduction."""
+    settings = tune if tune is not None else DenoiseTune()
+    if not DEFAULT_RNN_MODEL.is_file():
+        raise FileNotFoundError(f"RNNoise model not found: {DEFAULT_RNN_MODEL}")
+    track_noise = 1 if settings.afftdn_tn else 0
+    return ",".join(
+        (
+            f"highpass=f={settings.highpass_hz:g}:p=2:r=f64",
+            f"arnndn=m={ffmpeg_filter_path(DEFAULT_RNN_MODEL)}:mix={settings.rnnoise_mix:g}",
             (
-                "highpass=f=28:p=2:r=f64",
-                "bandreject=f=50.16:t=h:w=1.8:r=f64",
-                "bandreject=f=150.49:t=h:w=3.5:r=f64",
-            )
-        )
-    if mode == "broadband":
-        # RNNoise with partial dry mix preserves consonants; milder FFT + soft
-        # treble cut reduces residual hiss and harsh BGM edges.
-        model = Path(model_path) if model_path is not None else DEFAULT_RNN_MODEL
-        if not model.is_file():
-            raise FileNotFoundError(f"RNNoise model not found: {model}")
-        return ",".join(
+                f"afftdn=nr={settings.afftdn_nr:g}:nf={settings.afftdn_nf:g}"
+                f":nt={settings.afftdn_nt}:tn={track_noise}"
+            ),
             (
-                "highpass=f=28:p=2:r=f64",
-                f"arnndn=m={ffmpeg_filter_path(model)}:mix=0.78",
-                "afftdn=nr=14:nf=-50:nt=white:tn=1",
-                "treble=g=-2.5:f=7000:w=0.6",
-            )
+                f"treble=g={settings.treble_gain:g}"
+                f":f={settings.treble_hz:g}:w={settings.treble_width:g}"
+            ),
         )
-    raise ValueError(f"Unsupported mode: {mode}")
+    )
 
 
 def processed_filename(source: Path) -> str:
@@ -115,7 +123,7 @@ def build_ffmpeg_command(
     ffmpeg: str,
     source: Path,
     temporary_output: Path,
-    mode: str = "hum",
+    tune: DenoiseTune | None = None,
 ) -> list[str]:
     """Build an FFmpeg argument list for one supported output format."""
     codec_arguments = {
@@ -143,7 +151,7 @@ def build_ffmpeg_command(
         "-sn",
         "-dn",
         "-af",
-        build_filter_chain(mode),
+        build_filter_chain(tune),
         *codec_arguments[suffix],
         str(temporary_output),
     ]
@@ -154,7 +162,7 @@ def process_file(
     source: Path,
     destination: Path,
     keep_existing: bool,
-    mode: str = "hum",
+    tune: DenoiseTune | None = None,
     runner=None,
 ) -> ProcessResult:
     """Process one source and publish its output only after FFmpeg succeeds."""
@@ -168,7 +176,7 @@ def process_file(
     )
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        command = build_ffmpeg_command(ffmpeg, source, temporary_output, mode)
+        command = build_ffmpeg_command(ffmpeg, source, temporary_output, tune)
         completed = runner(
             command,
             capture_output=True,
@@ -191,9 +199,41 @@ def process_file(
             temporary_output.unlink()
 
 
+def _float_in_range(name: str, low: float, high: float):
+    def converter(text: str) -> float:
+        try:
+            value = float(text)
+        except ValueError as error:
+            raise argparse.ArgumentTypeError(f"{name} must be a number") from error
+        if value < low or value > high:
+            raise argparse.ArgumentTypeError(
+                f"{name} must be in [{low:g}, {high:g}], got {value:g}"
+            )
+        return value
+
+    return converter
+
+
+def tune_from_args(arguments: argparse.Namespace) -> DenoiseTune:
+    """Build DenoiseTune from parsed CLI arguments."""
+    return DenoiseTune(
+        highpass_hz=arguments.highpass_hz,
+        rnnoise_mix=arguments.rnnoise_mix,
+        afftdn_nr=arguments.afftdn_nr,
+        afftdn_nf=arguments.afftdn_nf,
+        afftdn_nt=arguments.afftdn_nt,
+        afftdn_tn=arguments.afftdn_tn,
+        treble_gain=arguments.treble_gain,
+        treble_hz=arguments.treble_hz,
+        treble_width=arguments.treble_width,
+    )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    defaults = DenoiseTune()
     parser = argparse.ArgumentParser(
-        description="Denoise old recordings (narrowband hum or broadband floor noise)."
+        description="Denoise old recordings with continuous floor noise.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "-i",
@@ -209,17 +249,125 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="output directory (default: same directory as each source file)",
     )
     parser.add_argument(
-        "-m",
-        "--mode",
-        choices=MODES,
-        default="hum",
-        help="denoise mode: hum (default) or broadband",
-    )
-    parser.add_argument(
         "-k",
         "--keep-existing",
         action="store_true",
         help="keep and skip existing output files",
+    )
+
+    tune = parser.add_argument_group(
+        "tuning options",
+        "Listening tweaks. Omit to use the validated defaults.",
+    )
+    tune.add_argument(
+        "--highpass-hz",
+        type=_float_in_range("highpass-hz", 1.0, 500.0),
+        default=defaults.highpass_hz,
+        metavar="HZ",
+        help=(
+            f"High-pass cutoff in Hz. Range 1~500, default {defaults.highpass_hz:g}.\n"
+            "Effect: removes sub-bass rumble / DC offset.\n"
+            "Lower: keeps more deep bass, warmer low end.\n"
+            "Higher: cuts more low rumble, cleaner but thinner tone."
+        ),
+    )
+    tune.add_argument(
+        "--rnnoise-mix",
+        type=_float_in_range("rnnoise-mix", -1.0, 1.0),
+        default=defaults.rnnoise_mix,
+        metavar="MIX",
+        help=(
+            f"RNNoise wet/dry mix. Range -1~1, default {defaults.rnnoise_mix:g}.\n"
+            "Effect: blends denoised output with the original (main denoise strength).\n"
+            "Lower: closer to original, clearer consonants, more residual noise.\n"
+            "Higher: stronger denoise, less hiss, more risk of swallowed speech."
+        ),
+    )
+    tune.add_argument(
+        "--afftdn-nr",
+        type=_float_in_range("afftdn-nr", 0.01, 97.0),
+        default=defaults.afftdn_nr,
+        metavar="DB",
+        help=(
+            f"FFT denoise strength (nr). Range 0.01~97, default {defaults.afftdn_nr:g}.\n"
+            "Effect: further reduces residual hiss after RNNoise.\n"
+            "Lower: more residual hiss, more speech detail kept.\n"
+            "Higher: less hiss, more risk of dull / airless speech."
+        ),
+    )
+    tune.add_argument(
+        "--afftdn-nf",
+        type=_float_in_range("afftdn-nf", -80.0, -20.0),
+        default=defaults.afftdn_nf,
+        metavar="DB",
+        help=(
+            f"FFT noise floor (nf) in dB. Range -80~-20, default {defaults.afftdn_nf:g}.\n"
+            "Effect: assumed noise-floor level for FFT denoise.\n"
+            "Lower (more negative): treats noise as quieter, more conservative.\n"
+            "Higher (closer to 0): treats noise as louder, more aggressive."
+        ),
+    )
+    tune.add_argument(
+        "--afftdn-nt",
+        choices=AFFTDN_NOISE_TYPES,
+        default=defaults.afftdn_nt,
+        metavar="TYPE",
+        help=(
+            f"FFT noise-type profile. Choices: {', '.join(AFFTDN_NOISE_TYPES)}; "
+            f"default {defaults.afftdn_nt}.\n"
+            "Effect: spectral shape used to estimate floor noise.\n"
+            "white: flatter hiss.\n"
+            "vinyl/shellac: more low-frequency-weighted floor noise."
+        ),
+    )
+    tune.add_argument(
+        "--afftdn-tn",
+        action=argparse.BooleanOptionalAction,
+        default=defaults.afftdn_tn,
+        help=(
+            f"Enable noise tracking. Default: "
+            f"{'on' if defaults.afftdn_tn else 'off'} (--afftdn-tn / --no-afftdn-tn).\n"
+            "Effect: updates the noise estimate over time.\n"
+            "On: adapts better across changing sections.\n"
+            "Off: fixed estimate; sometimes steadier, sometimes more residual."
+        ),
+    )
+    tune.add_argument(
+        "--treble-gain",
+        type=_float_in_range("treble-gain", -20.0, 20.0),
+        default=defaults.treble_gain,
+        metavar="DB",
+        help=(
+            f"Treble shelf gain in dB. Range -20~20, default {defaults.treble_gain:g}.\n"
+            "Effect: softens harsh BGM highs or restores air/sibilance.\n"
+            "Lower (more negative): darker highs, less harshness, possibly duller speech.\n"
+            "Higher (more positive): brighter highs, clearer but more harshness risk."
+        ),
+    )
+    tune.add_argument(
+        "--treble-hz",
+        type=_float_in_range("treble-hz", 1000.0, 16000.0),
+        default=defaults.treble_hz,
+        metavar="HZ",
+        help=(
+            f"Treble shelf center frequency in Hz. Range 1000~16000, "
+            f"default {defaults.treble_hz:g}.\n"
+            "Effect: where the treble shelf starts acting.\n"
+            "Lower: affects a wider upper-mid/high band.\n"
+            "Higher: mainly the top air band, more localized."
+        ),
+    )
+    tune.add_argument(
+        "--treble-width",
+        type=_float_in_range("treble-width", 0.01, 5.0),
+        default=defaults.treble_width,
+        metavar="W",
+        help=(
+            f"Treble shelf width. Range 0.01~5, default {defaults.treble_width:g}.\n"
+            "Effect: how wide the treble transition is.\n"
+            "Lower: steeper, more localized change.\n"
+            "Higher: gentler transition across a wider band."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -229,7 +377,7 @@ def run(
     output_root: Path | None,
     keep_existing: bool,
     ffmpeg: str,
-    mode: str = "hum",
+    tune: DenoiseTune | None = None,
 ) -> int:
     """Process all selected files and return a shell-friendly exit code."""
     input_path = input_path.resolve()
@@ -255,7 +403,7 @@ def run(
             )
             continue
 
-        result = process_file(ffmpeg, source, destination, keep_existing, mode)
+        result = process_file(ffmpeg, source, destination, keep_existing, tune)
         counts[result.status] += 1
         if result.status == "processed":
             print(f"[OK] {source} -> {destination}")
@@ -295,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
         arguments.output,
         arguments.keep_existing,
         ffmpeg,
-        arguments.mode,
+        tune_from_args(arguments),
     )
 
 
