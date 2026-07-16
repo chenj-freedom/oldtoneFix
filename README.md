@@ -33,28 +33,37 @@
 
 ## 快速开始
 
+完整命令形式（`[]` 表示可选）：
+
+```powershell
+python audio_denoise.py -i <输入路径> [-o <输出目录>] [-k]
+  [--highpass-hz <Hz>] [--rnnoise-mix <MIX>] [--afftdn-nr <dB>] [--afftdn-nf <dB>]
+  [--afftdn-nt white|vinyl|shellac] [--afftdn-tn | --no-afftdn-tn]
+  [--treble-gain <dB>] [--treble-hz <Hz>] [--treble-width <W>]
+```
+
 处理单个文件：
 
 ```powershell
-python audio_denoise.py -i "C:\audio\old recording.mp3"
+python audio_denoise.py -i "samples\recording.mp3"
 ```
 
 递归处理目录并指定输出目录：
 
 ```powershell
-python audio_denoise.py -i "C:\audio\唐诗宋词" -o "C:\audio\out"
+python audio_denoise.py -i "samples" -o "samples\out"
 ```
 
 保留已经存在的输出文件：
 
 ```powershell
-python audio_denoise.py -i "C:\audio\唐诗宋词" --output "C:\audio\out" --keep-existing
+python audio_denoise.py -i "samples" --output "samples\out" --keep-existing
 ```
 
 调整降噪强度：
 
 ```powershell
-python audio_denoise.py -i "a.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
+python audio_denoise.py -i "samples\recording.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
 ```
 
 查看完整命令行帮助：
@@ -86,28 +95,28 @@ python audio_denoise.py --help
 
 ## 命令行参数
 
-| 参数 | 说明 |
-|------|------|
-| `-i` / `--input` | 输入音频文件或目录，必填 |
-| `-o` / `--output` | 输出目录；默认写在每个源文件旁 |
-| `-k` / `--keep-existing` | 保留并跳过已经存在的输出 |
-| `-h` / `--help` | 显示英文命令行帮助 |
+| 参数 | 是否可选 | 说明 |
+|------|----------|------|
+| `-i` / `--input` | 必填 | 输入音频文件或目录 |
+| `-o` / `--output` | 可选 | 输出目录；默认写在每个源文件旁 |
+| `-k` / `--keep-existing` | 可选 | 保留并跳过已经存在的输出 |
+| `-h` / `--help` | 可选 | 显示英文命令行帮助 |
 
 ### 调优参数
 
 不传调优参数时使用经过试听验证的默认预设。
 
-| 参数 | 范围 | 默认 | 作用 | 越小 | 越大 |
-|------|------|------|------|------|------|
-| `--highpass-hz` | 1~500 | 28 | 切除极低频隆隆声 | 低频更厚 | 更干净、更薄 |
-| `--rnnoise-mix` | -1~1 | 0.78 | RNNoise 干湿比，主要降噪强度 | 更保字、底噪更多 | 更干净、易吞字 |
-| `--afftdn-nr` | 0.01~97 | 14 | FFT 再压低残留嘶声 | 细节与嘶声更多 | 嘶声更少、易发闷 |
-| `--afftdn-nf` | -80~-20 | -50 | FFT 假定噪声地板，单位 dB | 更保守 | 更激进 |
-| `--afftdn-nt` | white / vinyl / shellac | white | 噪声频谱模型 | — | white 偏嘶声；vinyl/shellac 偏低频底噪 |
-| `--afftdn-tn` / `--no-afftdn-tn` | on/off | on | 是否随时间更新噪声估计 | — | 开启更适应变化；关闭更固定 |
-| `--treble-gain` | -20~20 | -2.5 | 高频搁架增益，单位 dB | 更暗、较少刺耳 | 更亮、更易发尖 |
-| `--treble-hz` | 1000~16000 | 7000 | 高频搁架中心频率 | 影响范围更宽 | 更偏超高频 |
-| `--treble-width` | 0.01~5 | 0.6 | 高频搁架过渡宽度 | 更陡、更局部 | 更缓、更宽 |
+| 参数 | 是否可选 | 范围 | 默认 | 作用 | 越小 | 越大 |
+|------|----------|------|------|------|------|------|
+| `--highpass-hz` | 可选 | 1~500 | 28 | 切除极低频隆隆声 | 低频更厚 | 更干净、更薄 |
+| `--rnnoise-mix` | 可选 | -1~1 | 0.78 | RNNoise 干湿比，主要降噪强度 | 更保字、底噪更多 | 更干净、易吞字 |
+| `--afftdn-nr` | 可选 | 0.01~97 | 14 | FFT 再压低残留嘶声 | 细节与嘶声更多 | 嘶声更少、易发闷 |
+| `--afftdn-nf` | 可选 | -80~-20 | -50 | FFT 假定噪声地板，单位 dB | 更保守 | 更激进 |
+| `--afftdn-nt` | 可选 | white / vinyl / shellac | white | 噪声频谱模型 | — | white 偏嘶声；vinyl/shellac 偏低频底噪 |
+| `--afftdn-tn` / `--no-afftdn-tn` | 可选 | on/off | on | 是否随时间更新噪声估计 | — | 开启更适应变化；关闭更固定 |
+| `--treble-gain` | 可选 | -20~20 | -2.5 | 高频搁架增益，单位 dB | 更暗、较少刺耳 | 更亮、更易发尖 |
+| `--treble-hz` | 可选 | 1000~16000 | 7000 | 高频搁架中心频率 | 影响范围更宽 | 更偏超高频 |
+| `--treble-width` | 可选 | 0.01~5 | 0.6 | 高频搁架过渡宽度 | 更陡、更局部 | 更缓、更宽 |
 
 ## 测试
 

@@ -33,28 +33,37 @@
 
 ## Quick Start
 
+Full command form (`[]` = optional):
+
+```powershell
+python audio_denoise.py -i <input> [-o <output-dir>] [-k]
+  [--highpass-hz <Hz>] [--rnnoise-mix <MIX>] [--afftdn-nr <dB>] [--afftdn-nf <dB>]
+  [--afftdn-nt white|vinyl|shellac] [--afftdn-tn | --no-afftdn-tn]
+  [--treble-gain <dB>] [--treble-hz <Hz>] [--treble-width <W>]
+```
+
 Process one file:
 
 ```powershell
-python audio_denoise.py -i "C:\audio\old recording.mp3"
+python audio_denoise.py -i "samples\recording.mp3"
 ```
 
 Process a directory recursively and choose an output directory:
 
 ```powershell
-python audio_denoise.py -i "C:\audio\album" -o "C:\audio\out"
+python audio_denoise.py -i "samples" -o "samples\out"
 ```
 
 Preserve existing outputs:
 
 ```powershell
-python audio_denoise.py -i "C:\audio\album" --output "C:\audio\out" --keep-existing
+python audio_denoise.py -i "samples" --output "samples\out" --keep-existing
 ```
 
 Tune the denoise strength:
 
 ```powershell
-python audio_denoise.py -i "a.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
+python audio_denoise.py -i "samples\recording.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
 ```
 
 Show the complete CLI help:
@@ -86,28 +95,28 @@ Input → high-pass → RNNoise → FFT denoise → treble shaping → original-
 
 ## CLI Options
 
-| Option | Description |
-|--------|-------------|
-| `-i` / `--input` | Required input audio file or directory |
-| `-o` / `--output` | Output directory; defaults to beside each source |
-| `-k` / `--keep-existing` | Preserve and skip existing outputs |
-| `-h` / `--help` | Show the English command-line help |
+| Option | Required | Description |
+|--------|----------|-------------|
+| `-i` / `--input` | Required | Input audio file or directory |
+| `-o` / `--output` | Optional | Output directory; defaults to beside each source |
+| `-k` / `--keep-existing` | Optional | Preserve and skip existing outputs |
+| `-h` / `--help` | Optional | Show the English command-line help |
 
 ### Tuning Options
 
 Omit tuning options to use the validated listening preset.
 
-| Option | Range | Default | Effect | Lower | Higher |
-|--------|-------|---------|--------|-------|--------|
-| `--highpass-hz` | 1~500 | 28 | Cut sub-bass rumble | Warmer, fuller lows | Cleaner, thinner lows |
-| `--rnnoise-mix` | -1~1 | 0.78 | RNNoise wet/dry mix and main denoise strength | More speech detail and residual noise | Less hiss and more risk of swallowed speech |
-| `--afftdn-nr` | 0.01~97 | 14 | Reduce residual hiss with FFT denoising | More detail and hiss | Less hiss and duller speech |
-| `--afftdn-nf` | -80~-20 | -50 | Assumed FFT noise floor in dB | More conservative | More aggressive |
-| `--afftdn-nt` | white / vinyl / shellac | white | Noise spectrum profile | — | white favors hiss; vinyl/shellac favor low-weighted floor noise |
-| `--afftdn-tn` / `--no-afftdn-tn` | on/off | on | Update the noise estimate over time | — | On adapts; off keeps the estimate fixed |
-| `--treble-gain` | -20~20 | -2.5 | Treble shelf gain in dB | Darker and less harsh | Brighter with more harshness risk |
-| `--treble-hz` | 1000~16000 | 7000 | Treble shelf center frequency | Affects a wider upper band | Focuses on the top-air band |
-| `--treble-width` | 0.01~5 | 0.6 | Treble shelf transition width | Steeper and more localized | Gentler and wider |
+| Option | Required | Range | Default | Effect | Lower | Higher |
+|--------|----------|-------|---------|--------|-------|--------|
+| `--highpass-hz` | Optional | 1~500 | 28 | Cut sub-bass rumble | Warmer, fuller lows | Cleaner, thinner lows |
+| `--rnnoise-mix` | Optional | -1~1 | 0.78 | RNNoise wet/dry mix and main denoise strength | More speech detail and residual noise | Less hiss and more risk of swallowed speech |
+| `--afftdn-nr` | Optional | 0.01~97 | 14 | Reduce residual hiss with FFT denoising | More detail and hiss | Less hiss and duller speech |
+| `--afftdn-nf` | Optional | -80~-20 | -50 | Assumed FFT noise floor in dB | More conservative | More aggressive |
+| `--afftdn-nt` | Optional | white / vinyl / shellac | white | Noise spectrum profile | — | white favors hiss; vinyl/shellac favor low-weighted floor noise |
+| `--afftdn-tn` / `--no-afftdn-tn` | Optional | on/off | on | Update the noise estimate over time | — | On adapts; off keeps the estimate fixed |
+| `--treble-gain` | Optional | -20~20 | -2.5 | Treble shelf gain in dB | Darker and less harsh | Brighter with more harshness risk |
+| `--treble-hz` | Optional | 1000~16000 | 7000 | Treble shelf center frequency | Affects a wider upper band | Focuses on the top-air band |
+| `--treble-width` | Optional | 0.01~5 | 0.6 | Treble shelf transition width | Steeper and more localized | Gentler and wider |
 
 ## Tests
 
