@@ -31,12 +31,38 @@
 - [FFmpeg](https://ffmpeg.org/) available on `PATH`
 - The bundled RNNoise model: `models/cb.rnnn`
 
+## Browser UI
+
+The recommended local browser UI exposes every tuning value as a slider with its validated default position, current value, purpose, and clear lower/higher audible effects. Batch jobs show real-time progress, completed-file counts, and per-file logs. Use the `中文 / EN` switch in the upper-right corner at any time; the browser remembers the selected language and switching never interrupts the current task.
+
+Windows:
+
+```text
+Double-click start_web.bat
+```
+
+macOS:
+
+```text
+Double-click start_web.command
+```
+
+If macOS says the file is not executable, run `chmod +x start_web.command` once in the project directory, then double-click it again.
+
+You can also start it from a terminal:
+
+```powershell
+python .\scripts\oldtonefix_web.py
+```
+
+It opens the browser automatically. Use `python .\scripts\oldtonefix_web.py --no-open` to keep it closed and visit the local address printed in the terminal. The UI calls the same `scripts/oldtonefix.py` processing pipeline, so FFmpeg and `models/cb.rnnn` are still required.
+
 ## Quick Start
 
 Full command form (`[]` = optional):
 
 ```powershell
-python audio_denoise.py -i <input> [-o <output-dir>] [-k]
+python .\scripts\oldtonefix.py -i <input> [-o <output-dir>] [-k]
   [--highpass-hz <Hz>] [--rnnoise-mix <MIX>] [--afftdn-nr <dB>] [--afftdn-nf <dB>]
   [--afftdn-nt white|vinyl|shellac] [--afftdn-tn | --no-afftdn-tn]
   [--treble-gain <dB>] [--treble-hz <Hz>] [--treble-width <W>]
@@ -45,37 +71,38 @@ python audio_denoise.py -i <input> [-o <output-dir>] [-k]
 Process one file:
 
 ```powershell
-python audio_denoise.py -i "samples\recording.mp3"
+python .\scripts\oldtonefix.py -i "samples\recording.mp3"
 ```
 
 Process a directory recursively and choose an output directory:
 
 ```powershell
-python audio_denoise.py -i "samples" -o "samples\out"
+python .\scripts\oldtonefix.py -i "samples" -o "samples\out"
 ```
 
 Preserve existing outputs:
 
 ```powershell
-python audio_denoise.py -i "samples" --output "samples\out" --keep-existing
+python .\scripts\oldtonefix.py -i "samples" --output "samples\out" --keep-existing
 ```
 
 Tune the denoise strength:
 
 ```powershell
-python audio_denoise.py -i "samples\recording.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
+python .\scripts\oldtonefix.py -i "samples\recording.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
 ```
 
 Show the complete CLI help:
 
 ```powershell
-python audio_denoise.py --help
+python .\scripts\oldtonefix.py --help
 ```
 
 ## Output Behavior
 
 - By default, outputs are written beside each source as `*_processed`, for example `old recording_processed.mp3`.
-- With `-o` / `--output`, directory processing preserves relative paths under the output directory.
+- With `-o` / `--output` pointing to a different directory, oldtoneFix keeps the original filename; directory processing also preserves relative paths.
+- If the requested output location would be the source file itself, oldtoneFix adds `_processed` instead and never overwrites the source.
 - Existing destination files are **overwritten by default**.
 - Use `-k` / `--keep-existing` to preserve and skip existing outputs.
 - `.mp3` uses `libmp3lame -q:a 2`, `.wav` uses 24-bit PCM, and `.flac` remains lossless.
@@ -98,7 +125,7 @@ Input → high-pass → RNNoise → FFT denoise → treble shaping → original-
 | Option | Required | Description |
 |--------|----------|-------------|
 | `-i` / `--input` | Required | Input audio file or directory |
-| `-o` / `--output` | Optional | Output directory; defaults to beside each source |
+| `-o` / `--output` | Optional | Output directory; a different directory keeps the original filename, while an omitted value writes `*_processed` beside the source |
 | `-k` / `--keep-existing` | Optional | Preserve and skip existing outputs |
 | `-h` / `--help` | Optional | Show the English command-line help |
 
@@ -121,7 +148,7 @@ Omit tuning options to use the validated listening preset.
 ## Tests
 
 ```powershell
-python -m unittest discover -s test -v
+python -m unittest discover -s tests -v
 ```
 
 ## License

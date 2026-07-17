@@ -1,4 +1,5 @@
 import io
+import json
 import shutil
 import sys
 import tempfile
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import audio_denoise as denoise
+from scripts import oldtonefix as denoise
 
 
 class PureFunctionTests(unittest.TestCase):
@@ -78,7 +79,15 @@ class PureFunctionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unsupported audio format"):
                 denoise.find_audio_files(source, None)
 
-    def test_output_paths_use_processed_suffix_and_optional_output_root(self):
+    def test_find_audio_files_keeps_sources_when_output_is_the_input_directory(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            input_root = Path(temporary_directory)
+            source = input_root / "recording.mp3"
+            source.touch()
+
+            self.assertEqual(denoise.find_audio_files(input_root, input_root), [source])
+
+    def test_output_paths_follow_output_directory_naming_rules(self):
         self.assertTrue(hasattr(denoise, "resolve_output_root"))
         self.assertTrue(hasattr(denoise, "destination_for"))
         input_root = Path("C:/input")
@@ -95,11 +104,19 @@ class PureFunctionTests(unittest.TestCase):
         )
         self.assertEqual(
             denoise.destination_for(input_root, source, output_root),
-            (output_root / "album" / "track_processed.mp3").resolve(),
+            (output_root / "album" / "track.mp3").resolve(),
         )
         self.assertEqual(
             denoise.destination_for(source, source, output_root),
-            (output_root / "track_processed.mp3").resolve(),
+            (output_root / "track.mp3").resolve(),
+        )
+        self.assertEqual(
+            denoise.destination_for(input_root, source, input_root),
+            (source.parent / "track_processed.mp3").resolve(),
+        )
+        self.assertEqual(
+            denoise.destination_for(source, source, source.parent),
+            (source.parent / "track_processed.mp3").resolve(),
         )
         self.assertNotEqual(
             denoise.destination_for(source, source, None),
@@ -309,6 +326,7 @@ class CliTests(unittest.TestCase):
             denoise.parse_args(["-h"])
         help_text = buffer.getvalue()
         self.assertIn("tuning options", help_text)
+        self.assertIn("keeps original filenames", help_text)
         for token in (
             "--highpass-hz",
             "--rnnoise-mix",
@@ -377,7 +395,7 @@ class CliTests(unittest.TestCase):
                 Path(command[-1]).write_bytes(b"processed")
                 return CompletedProcess(command, 0, stdout="", stderr="")
 
-            with patch("audio_denoise.subprocess.run", side_effect=fake_runner):
+            with patch("scripts.oldtonefix.subprocess.run", side_effect=fake_runner):
                 with redirect_stdout(io.StringIO()):
                     exit_code = denoise.run(source, None, False, "ffmpeg")
 
@@ -395,7 +413,7 @@ class CliTests(unittest.TestCase):
             source.write_bytes(b"source")
             error_output = io.StringIO()
             with patch(
-                "audio_denoise.destination_for",
+                "scripts.oldtonefix.destination_for",
                 return_value=source.resolve(),
             ):
                 with redirect_stderr(error_output), redirect_stdout(io.StringIO()):
@@ -407,7 +425,7 @@ class CliTests(unittest.TestCase):
     def test_main_reports_unavailable_ffmpeg(self):
         self.assertTrue(hasattr(denoise, "main"))
         error_output = io.StringIO()
-        with patch("audio_denoise.shutil.which", return_value=None):
+        with patch("scripts.oldtonefix.shutil.which", return_value=None):
             with redirect_stderr(error_output):
                 exit_code = denoise.main(["-i", "input"])
 
@@ -423,13 +441,47 @@ class CliTests(unittest.TestCase):
 
         standard_output = ReconfigurableBuffer()
         error_output = ReconfigurableBuffer()
-        with patch("audio_denoise.shutil.which", return_value=None):
+        with patch("scripts.oldtonefix.shutil.which", return_value=None):
             with redirect_stdout(standard_output), redirect_stderr(error_output):
                 denoise.main(["-i", "input"])
 
-        expected = {"encoding": "utf-8", "errors": "replace"}
+        expected = {
+            "encoding": "utf-8",
+            "errors": "replace",
+            "line_buffering": True,
+            "write_through": True,
+        }
         self.assertEqual(standard_output.configuration, expected)
         self.assertEqual(error_output.configuration, expected)
+
+    def test_run_emits_machine_progress_for_every_finished_file(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            input_root = Path(temporary_directory) / "input"
+            output_root = Path(temporary_directory) / "output"
+            input_root.mkdir()
+            for name in ("one.mp3", "two.wav"):
+                (input_root / name).touch()
+
+            with patch(
+                "scripts.oldtonefix.process_file",
+                return_value=denoise.ProcessResult("processed"),
+            ), redirect_stdout(io.StringIO()) as output:
+                exit_code = denoise.run(
+                    input_root,
+                    output_root,
+                    False,
+                    "ffmpeg",
+                    progress_json=True,
+                )
+
+        events = [
+            json.loads(line.removeprefix(denoise.PROGRESS_PREFIX))
+            for line in output.getvalue().splitlines()
+            if line.startswith(denoise.PROGRESS_PREFIX)
+        ]
+        self.assertEqual(exit_code, 0)
+        self.assertEqual([event["completed"] for event in events], [0, 1, 2])
+        self.assertEqual([event["total"] for event in events], [2, 2, 2])
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is required")
     def test_run_continues_after_one_real_ffmpeg_failure(self):
@@ -453,8 +505,8 @@ class CliTests(unittest.TestCase):
                 )
 
             self.assertEqual(exit_code, 1)
-            self.assertFalse((output_root / "a_invalid_processed.mp3").exists())
-            self.assertTrue((output_root / "b_valid_processed.wav").exists())
+            self.assertFalse((output_root / "a_invalid.mp3").exists())
+            self.assertTrue((output_root / "b_valid.wav").exists())
             self.assertIn("[FAIL]", standard_output.getvalue())
             self.assertIn("[OK]", standard_output.getvalue())
             self.assertIn("failed=1", standard_output.getvalue())
@@ -467,7 +519,7 @@ class DocumentationTests(unittest.TestCase):
                 readme = ROOT / name
                 self.assertTrue(readme.exists())
                 content = readme.read_text(encoding="utf-8")
-                self.assertIn("python audio_denoise.py", content)
+                self.assertIn("python .\\scripts\\oldtonefix.py", content)
                 self.assertIn("FFmpeg", content)
                 self.assertIn("--keep-existing", content)
                 self.assertIn("--output", content)

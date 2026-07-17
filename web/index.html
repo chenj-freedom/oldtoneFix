@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="app.title">oldtoneFix · 本地音频修复</title>
+  <link rel="icon" href="/logo.png" type="image/png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <img src="/logo.png" alt="" class="brand-logo">
+        <div>
+          <p class="eyebrow">LOCAL AUDIO RESTORATION</p>
+          <h1>oldtoneFix</h1>
+          <p class="tagline" data-i18n="app.tagline">让老录音更干净，也保留每一个字。</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <div id="language-switch" class="language-switch" role="group" aria-label="界面语言" data-i18n-aria-label="language.label">
+          <button class="language-option" type="button" data-language="zh" aria-pressed="true">中文</button>
+          <button class="language-option" type="button" data-language="en" aria-pressed="false">EN</button>
+        </div>
+        <div id="health" class="health-pill" data-state="checking">
+          <span class="health-dot"></span>
+          <span id="health-text">正在检查 FFmpeg…</span>
+        </div>
+      </div>
+    </header>
+
+    <form id="denoise-form">
+      <section class="panel source-panel">
+        <div class="section-heading">
+          <div>
+            <span class="section-number">01</span>
+            <h2 data-i18n="source.title">选择音频</h2>
+          </div>
+          <p data-i18n="source.description">支持 MP3、WAV、FLAC 文件，也可以填写目录批量处理。</p>
+        </div>
+
+        <div class="source-grid">
+          <label class="text-field field-wide">
+            <span><span data-i18n="source.input">输入文件或目录</span> <b data-i18n="common.required">必填</b></span>
+            <input id="input-path" name="input" type="text" required autocomplete="off" placeholder="例如 C:\Audio\old-recording.mp3" data-i18n-placeholder="source.inputPlaceholder">
+          </label>
+          <label class="text-field field-wide">
+            <span><span data-i18n="source.output">输出目录</span> <small data-i18n="source.outputHint">留空生成 *_processed；不同目录时保留原文件名</small></span>
+            <input id="output-path" name="output" type="text" autocomplete="off" placeholder="例如 C:\Audio\restored" data-i18n-placeholder="source.outputPlaceholder">
+          </label>
+          <label class="switch-field">
+            <span class="switch-copy">
+              <strong data-i18n="source.skip">跳过已有结果</strong>
+              <small data-i18n="source.skipHelp">关闭时默认覆盖目标目录中已有的同名结果</small>
+            </span>
+            <input id="keep-existing" name="keep_existing" type="checkbox">
+            <span class="switch" aria-hidden="true"></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="action-bar">
+        <div class="action-copy"><strong data-i18n="action.ready">准备开始修复</strong><span data-i18n="action.help">确认输入路径和参数后即可开始；源文件不会被覆盖。</span></div>
+        <div id="job-progress" class="job-progress" role="progressbar" aria-label="任务处理进度" data-i18n-aria-label="progress.aria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="progress-copy">
+            <strong id="progress-label">等待开始</strong>
+            <span id="progress-text">0%</span>
+          </div>
+          <div class="progress-track" aria-hidden="true"><span id="progress-fill" class="progress-fill"></span></div>
+        </div>
+        <div class="action-buttons">
+          <button id="stop-button" class="danger-button" type="button" disabled data-i18n="action.stop">停止任务</button>
+          <button id="start-button" class="primary-button" type="submit"><span data-i18n="action.start">开始降噪</span><span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+
+      <section class="panel tuning-panel">
+        <div class="section-heading heading-actions">
+          <div>
+            <span class="section-number">02</span>
+            <h2 data-i18n="tuning.title">调节修复效果</h2>
+          </div>
+          <div class="heading-side">
+            <nav class="tuning-pagination" aria-label="修复参数分页" data-i18n-aria-label="tuning.pagination">
+              <button id="page-prev" class="page-arrow" type="button" aria-label="上一页" data-i18n-aria-label="tuning.previous" disabled>‹</button>
+              <button class="page-button" type="button" data-page-target="0" aria-label="第 1 页" data-i18n-aria-label="tuning.page1" aria-current="page">1</button>
+              <button class="page-button" type="button" data-page-target="1" aria-label="第 2 页" data-i18n-aria-label="tuning.page2">2</button>
+              <button class="page-button" type="button" data-page-target="2" aria-label="第 3 页" data-i18n-aria-label="tuning.page3">3</button>
+              <button class="page-button" type="button" data-page-target="3" aria-label="第 4 页" data-i18n-aria-label="tuning.page4">4</button>
+              <button id="page-next" class="page-arrow" type="button" aria-label="下一页" data-i18n-aria-label="tuning.next">›</button>
+              <span id="page-status" aria-live="polite">1 / 4</span>
+            </nav>
+            <button id="reset-tuning" class="ghost-button" type="button" data-i18n="tuning.reset">恢复默认值</button>
+          </div>
+        </div>
+
+        <div class="tuning-pages">
+        <div class="tuning-page slider-grid" data-page="0">
+          <article class="slider-card" data-slider="highpass-hz">
+            <div class="slider-title">
+              <div><h3 data-i18n="highpass.title">低频隆隆声切除</h3><code>--highpass-hz</code></div>
+              <output for="highpass-hz"><span>28</span> Hz</output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="highpass.purpose">过滤直流偏移、风噪和唱机产生的极低频震动。</span></p>
+            <div class="range-wrap">
+              <input id="highpass-hz" name="highpass_hz" type="range" min="1" max="500" step="1" value="28" data-default="28" data-unit="Hz">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="highpass.lower">保留更多低频，声音更厚</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="highpass.higher">隆隆声更少，但可能变薄</span></span></div>
+          </article>
+
+          <article class="slider-card" data-slider="rnnoise-mix">
+            <div class="slider-title">
+              <div><h3 data-i18n="rnnoise.title">主要人声降噪强度</h3><code>--rnnoise-mix</code></div>
+              <output for="rnnoise-mix"><span>0.78</span></output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="rnnoise.purpose">控制 RNNoise 修复音与原音的混合比例，是最主要的降噪旋钮。</span></p>
+            <div class="range-wrap">
+              <input id="rnnoise-mix" name="rnnoise_mix" type="range" min="-1" max="1" step="0.01" value="0.78" data-default="0.78" data-unit="">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="rnnoise.lower">原声细节更多，底噪也更多</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="rnnoise.higher">降噪更强，过高可能吞字</span></span></div>
+          </article>
+
+        </div>
+        <div class="tuning-page slider-grid" data-page="1" hidden>
+
+          <article class="slider-card" data-slider="afftdn-nr">
+            <div class="slider-title">
+              <div><h3 data-i18n="afftdnNr.title">残余嘶声压低量</h3><code>--afftdn-nr</code></div>
+              <output for="afftdn-nr"><span>14</span> dB</output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="afftdnNr.purpose">在 RNNoise 之后继续压低稳定的白噪声和磁带嘶声。</span></p>
+            <div class="range-wrap">
+              <input id="afftdn-nr" name="afftdn_nr" type="range" min="0.01" max="97" step="0.01" value="14" data-default="14" data-unit="dB">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="afftdnNr.lower">保留细节，也保留更多嘶声</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="afftdnNr.higher">嘶声更少，声音可能发闷</span></span></div>
+          </article>
+
+          <article class="slider-card" data-slider="afftdn-nf">
+            <div class="slider-title">
+              <div><h3 data-i18n="afftdnNf.title">噪声地板判断</h3><code>--afftdn-nf</code></div>
+              <output for="afftdn-nf"><span>-50</span> dB</output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="afftdnNf.purpose">告诉 FFT 降噪器把多大的背景声当成需要处理的噪声。</span></p>
+            <div class="range-wrap">
+              <input id="afftdn-nf" name="afftdn_nf" type="range" min="-80" max="-20" step="1" value="-50" data-default="-50" data-unit="dB">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="afftdnNf.lower">更保守，较少误伤语音</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="afftdnNf.higher">更激进，会处理更响的底噪</span></span></div>
+          </article>
+
+        </div>
+        <div class="tuning-page slider-grid" data-page="2" hidden>
+
+          <article class="slider-card" data-slider="treble-gain">
+            <div class="slider-title">
+              <div><h3 data-i18n="trebleGain.title">高频明暗</h3><code>--treble-gain</code></div>
+              <output for="treble-gain"><span>-2.5</span> dB</output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="trebleGain.purpose">柔化尖锐的高频，也可以补回空气感和齿音清晰度。</span></p>
+            <div class="range-wrap">
+              <input id="treble-gain" name="treble_gain" type="range" min="-20" max="20" step="0.1" value="-2.5" data-default="-2.5" data-unit="dB">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="trebleGain.lower">更暗、更柔和</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="trebleGain.higher">更明亮，也更容易刺耳</span></span></div>
+          </article>
+
+          <article class="slider-card" data-slider="treble-hz">
+            <div class="slider-title">
+              <div><h3 data-i18n="trebleHz.title">高频调整起点</h3><code>--treble-hz</code></div>
+              <output for="treble-hz"><span>7000</span> Hz</output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="trebleHz.purpose">决定从哪个频率附近开始进行高频明暗调整。</span></p>
+            <div class="range-wrap">
+              <input id="treble-hz" name="treble_hz" type="range" min="1000" max="16000" step="100" value="7000" data-default="7000" data-unit="Hz">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="trebleHz.lower">影响更宽的中高频区域</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="trebleHz.higher">只调整最顶部空气感</span></span></div>
+          </article>
+
+        </div>
+        <div class="tuning-page slider-grid" data-page="3" hidden>
+
+          <article class="slider-card" data-slider="treble-width">
+            <div class="slider-title">
+              <div><h3 data-i18n="trebleWidth.title">高频过渡宽度</h3><code>--treble-width</code></div>
+              <output for="treble-width"><span>0.6</span></output>
+            </div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="trebleWidth.purpose">控制高频搁架从原声过渡到目标增益时的影响宽度。</span></p>
+            <div class="range-wrap">
+              <input id="treble-width" name="treble_width" type="range" min="0.01" max="5" step="0.01" value="0.6" data-default="0.6" data-unit="">
+              <span class="default-marker" aria-hidden="true" data-label="默认"></span>
+            </div>
+            <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="trebleWidth.lower">变化更陡、更局部</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="trebleWidth.higher">过渡更宽、更柔和</span></span></div>
+          </article>
+
+          <article class="slider-card choice-card">
+            <div class="slider-title"><div><h3 data-i18n="noise.title">底噪类型</h3><code>--afftdn-nt</code></div></div>
+            <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="noise.purpose">选择最接近原录音底噪频谱形状的模型。</span></p>
+            <div class="segmented">
+              <label><input type="radio" name="afftdn_nt" value="white" checked><span><b>White</b><small data-i18n="noise.white">均匀白噪 / 电流嘶声</small></span></label>
+              <label><input type="radio" name="afftdn_nt" value="vinyl"><span><b>Vinyl</b><small data-i18n="noise.vinyl">黑胶唱片底噪</small></span></label>
+              <label><input type="radio" name="afftdn_nt" value="shellac"><span><b>Shellac</b><small data-i18n="noise.shellac">粗纹唱片底噪</small></span></label>
+            </div>
+            <label class="switch-field tracking-switch">
+              <span class="switch-copy"><strong data-i18n="noise.tracking">动态跟踪噪声</strong><small data-i18n="noise.trackingHelp">开启时随录音内容更新噪声估计；关闭时估计更固定</small></span>
+              <input id="afftdn-tn" name="afftdn_tn" type="checkbox" checked>
+              <span class="switch" aria-hidden="true"></span>
+            </label>
+          </article>
+        </div>
+        </div>
+      </section>
+    </form>
+
+    <section class="panel result-panel">
+      <div class="section-heading result-heading">
+        <div><span class="section-number">03</span><h2 data-i18n="result.title">处理状态</h2></div>
+        <span id="job-status" class="job-status" data-state="idle">等待开始</span>
+      </div>
+      <div class="command-row"><span data-i18n="result.command">运行命令</span><code id="command">提交任务后显示</code></div>
+      <pre id="log" aria-live="polite">这里会显示 oldtoneFix 的处理日志。</pre>
+    </section>
+  </main>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

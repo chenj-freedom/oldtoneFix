@@ -1,6 +1,7 @@
 """Batch denoise for old recordings with continuous floor noise."""
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -12,7 +13,9 @@ from pathlib import Path
 
 SUPPORTED_SUFFIXES = {".mp3", ".wav", ".flac"}
 PROCESSED_MARKER = "_processed"
-DEFAULT_RNN_MODEL = Path(__file__).resolve().parent / "models" / "cb.rnnn"
+PROGRESS_PREFIX = "@@OLDTONEFIX_PROGRESS@@"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_RNN_MODEL = REPO_ROOT / "models" / "cb.rnnn"
 AFFTDN_NOISE_TYPES = ("white", "vinyl", "shellac")
 
 
@@ -84,7 +87,10 @@ def find_audio_files(input_path: Path, output_root: Path | None) -> list[Path]:
             raise ValueError(f"Unsupported audio format: {input_path.suffix or '(none)'}")
         return [input_path]
 
+    resolved_input = input_path.resolve()
     resolved_output = output_root.resolve() if output_root is not None else None
+    if resolved_output == resolved_input:
+        resolved_output = None
     files = (
         path
         for path in input_path.rglob("*")
@@ -110,13 +116,16 @@ def resolve_output_root(_input_path: Path, requested: Path | None) -> Path | Non
 def destination_for(
     input_path: Path, source: Path, output_root: Path | None
 ) -> Path:
-    """Map a source to its *_processed destination without overwriting the source."""
-    name = processed_filename(source)
+    """Map a source to a destination, adding _processed only to avoid the source."""
     if output_root is None:
-        return (source.parent / name).resolve()
+        return (source.parent / processed_filename(source)).resolve()
     if source == input_path:
-        return (output_root / name).resolve()
-    return (output_root / source.relative_to(input_path).with_name(name)).resolve()
+        candidate = (output_root / source.name).resolve()
+    else:
+        candidate = (output_root / source.relative_to(input_path)).resolve()
+    if candidate == source.resolve():
+        return candidate.with_name(processed_filename(source))
+    return candidate
 
 
 def build_ffmpeg_command(
@@ -246,13 +255,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "-o",
         "--output",
         type=Path,
-        help="output directory (default: same directory as each source file)",
+        help=(
+            "output directory; a different directory keeps original filenames "
+            "(default: write *_processed beside each source)"
+        ),
     )
     parser.add_argument(
         "-k",
         "--keep-existing",
         action="store_true",
         help="keep and skip existing output files",
+    )
+    parser.add_argument(
+        "--progress-json",
+        action="store_true",
+        help=argparse.SUPPRESS,
     )
 
     tune = parser.add_argument_group(
@@ -378,6 +395,7 @@ def run(
     keep_existing: bool,
     ffmpeg: str,
     tune: DenoiseTune | None = None,
+    progress_json: bool = False,
 ) -> int:
     """Process all selected files and return a shell-friendly exit code."""
     input_path = input_path.resolve()
@@ -392,40 +410,71 @@ def run(
         print("Error: no supported audio files found", file=sys.stderr)
         return 1
 
+    total = len(sources)
+    print(f"Found {total} supported audio file(s).", flush=True)
+    if progress_json:
+        _emit_progress(0, total)
+
     counts = {"processed": 0, "skipped": 0, "failed": 0}
-    for source in sources:
+    for completed, source in enumerate(sources, start=1):
         destination = destination_for(input_path, source, output_root)
         if destination == source.resolve():
             counts["failed"] += 1
             print(
                 f"[FAIL] {source}: output would replace the source file",
                 file=sys.stderr,
+                flush=True,
             )
+            if progress_json:
+                _emit_progress(completed, total, source, "failed")
             continue
 
         result = process_file(ffmpeg, source, destination, keep_existing, tune)
         counts[result.status] += 1
         if result.status == "processed":
-            print(f"[OK] {source} -> {destination}")
+            print(f"[OK] {source} -> {destination}", flush=True)
         elif result.status == "skipped":
-            print(f"[SKIP] {source}: {result.detail}")
+            print(f"[SKIP] {source}: {result.detail}", flush=True)
         else:
-            print(f"[FAIL] {source}: {result.detail}")
+            print(f"[FAIL] {source}: {result.detail}", flush=True)
+        if progress_json:
+            _emit_progress(completed, total, source, result.status)
 
     print(
         "Summary: "
         f"processed={counts['processed']} "
         f"skipped={counts['skipped']} "
-        f"failed={counts['failed']}"
+        f"failed={counts['failed']}",
+        flush=True,
     )
     return 1 if counts["failed"] else 0
+
+
+def _emit_progress(
+    completed: int,
+    total: int,
+    source: Path | None = None,
+    status: str | None = None,
+) -> None:
+    event = {
+        "completed": completed,
+        "total": total,
+        "current": str(source) if source is not None else "",
+        "status": status or "scanned",
+    }
+    print(f"{PROGRESS_PREFIX}{json.dumps(event, ensure_ascii=False)}", flush=True)
 
 
 def _configure_utf8_output() -> None:
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
+            reconfigure(
+                encoding="utf-8",
+                errors="replace",
+                line_buffering=True,
+                write_through=True,
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -444,6 +493,7 @@ def main(argv: list[str] | None = None) -> int:
         arguments.keep_existing,
         ffmpeg,
         tune_from_args(arguments),
+        arguments.progress_json,
     )
 
 

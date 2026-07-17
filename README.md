@@ -31,12 +31,38 @@
 - 已加入 `PATH` 的 [FFmpeg](https://ffmpeg.org/)
 - 仓库内的 RNNoise 模型：`models/cb.rnnn`
 
+## 浏览器界面
+
+推荐使用本地浏览器界面：所有降噪参数都提供带默认位置、当前值、用途说明和“越小 / 越大”听感提示的滑块；批量任务会显示实时进度、完成数量和逐文件日志。页面右上角可随时使用 `中文 / EN` 开关切换中英文，选择会被浏览器记住，切换时不会中断当前任务。
+
+Windows：
+
+```text
+双击 start_web.bat
+```
+
+macOS：
+
+```text
+双击 start_web.command
+```
+
+如果 macOS 提示没有执行权限，请在项目目录运行一次 `chmod +x start_web.command`，然后重新双击。
+
+也可以从终端手动启动：
+
+```powershell
+python .\scripts\oldtonefix_web.py
+```
+
+程序会自动打开浏览器；如果不希望自动打开，可运行 `python .\scripts\oldtonefix_web.py --no-open`，然后访问终端中显示的本地地址。浏览器界面与命令行使用同一个 `scripts/oldtonefix.py` 处理链，因此仍需安装 FFmpeg，并保留 `models/cb.rnnn`。
+
 ## 快速开始
 
 完整命令形式（`[]` 表示可选）：
 
 ```powershell
-python audio_denoise.py -i <输入路径> [-o <输出目录>] [-k]
+python .\scripts\oldtonefix.py -i <输入路径> [-o <输出目录>] [-k]
   [--highpass-hz <Hz>] [--rnnoise-mix <MIX>] [--afftdn-nr <dB>] [--afftdn-nf <dB>]
   [--afftdn-nt white|vinyl|shellac] [--afftdn-tn | --no-afftdn-tn]
   [--treble-gain <dB>] [--treble-hz <Hz>] [--treble-width <W>]
@@ -45,37 +71,38 @@ python audio_denoise.py -i <输入路径> [-o <输出目录>] [-k]
 处理单个文件：
 
 ```powershell
-python audio_denoise.py -i "samples\recording.mp3"
+python .\scripts\oldtonefix.py -i "samples\recording.mp3"
 ```
 
 递归处理目录并指定输出目录：
 
 ```powershell
-python audio_denoise.py -i "samples" -o "samples\out"
+python .\scripts\oldtonefix.py -i "samples" -o "samples\out"
 ```
 
 保留已经存在的输出文件：
 
 ```powershell
-python audio_denoise.py -i "samples" --output "samples\out" --keep-existing
+python .\scripts\oldtonefix.py -i "samples" --output "samples\out" --keep-existing
 ```
 
 调整降噪强度：
 
 ```powershell
-python audio_denoise.py -i "samples\recording.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
+python .\scripts\oldtonefix.py -i "samples\recording.mp3" --rnnoise-mix 0.7 --afftdn-nr 12 --treble-gain -3
 ```
 
 查看完整命令行帮助：
 
 ```powershell
-python audio_denoise.py --help
+python .\scripts\oldtonefix.py --help
 ```
 
 ## 输出行为
 
 - 默认在源文件旁生成 `*_processed`，例如 `old recording_processed.mp3`。
-- 指定 `-o` / `--output` 后，目录批处理会在输出目录中保留相对路径。
+- 指定与源目录不同的 `-o` / `--output` 后，输出会保留原文件名；目录批处理同时保留相对路径。
+- 如果指定的输出位置会与源文件相同，程序仍会自动增加 `_processed`，不会覆盖源文件。
 - **默认覆盖**已经存在的目标文件。
 - 使用 `-k` / `--keep-existing` 可保留并跳过已经存在的输出。
 - `.mp3` 使用 `libmp3lame -q:a 2`，`.wav` 使用 24-bit PCM，`.flac` 保持无损编码。
@@ -98,7 +125,7 @@ python audio_denoise.py --help
 | 参数 | 是否可选 | 说明 |
 |------|----------|------|
 | `-i` / `--input` | 必填 | 输入音频文件或目录 |
-| `-o` / `--output` | 可选 | 输出目录；默认写在每个源文件旁 |
+| `-o` / `--output` | 可选 | 输出目录；不同目录保留原文件名，留空则在源文件旁生成 `*_processed` |
 | `-k` / `--keep-existing` | 可选 | 保留并跳过已经存在的输出 |
 | `-h` / `--help` | 可选 | 显示英文命令行帮助 |
 
@@ -121,7 +148,7 @@ python audio_denoise.py --help
 ## 测试
 
 ```powershell
-python -m unittest discover -s test -v
+python -m unittest discover -s tests -v
 ```
 
 ## 许可证
