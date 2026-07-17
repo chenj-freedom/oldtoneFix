@@ -19,7 +19,7 @@
         </div>
       </div>
       <div class="top-actions">
-        <div id="language-switch" class="language-switch" role="group" aria-label="界面语言" data-i18n-aria-label="language.label">
+        <div class="language-switch" role="group" aria-label="界面语言" data-i18n-aria-label="language.label">
           <button class="language-option" type="button" data-language="zh" aria-pressed="true">中文</button>
           <button class="language-option" type="button" data-language="en" aria-pressed="false">EN</button>
         </div>
@@ -31,7 +31,7 @@
     </header>
 
     <form id="denoise-form">
-      <section class="panel source-panel">
+      <section class="panel">
         <div class="section-heading">
           <div>
             <span class="section-number">01</span>
@@ -41,11 +41,11 @@
         </div>
 
         <div class="source-grid">
-          <label class="text-field field-wide">
+          <label class="text-field">
             <span><span data-i18n="source.input">输入文件或目录</span> <b data-i18n="common.required">必填</b></span>
             <input id="input-path" name="input" type="text" required autocomplete="off" placeholder="例如 C:\Audio\old-recording.mp3" data-i18n-placeholder="source.inputPlaceholder">
           </label>
-          <label class="text-field field-wide">
+          <label class="text-field">
             <span><span data-i18n="source.output">输出目录</span> <small data-i18n="source.outputHint">留空生成 *_processed；不同目录时保留原文件名</small></span>
             <input id="output-path" name="output" type="text" autocomplete="off" placeholder="例如 C:\Audio\restored" data-i18n-placeholder="source.outputPlaceholder">
           </label>
@@ -75,7 +75,7 @@
         </div>
       </section>
 
-      <section class="panel tuning-panel">
+      <section class="panel">
         <div class="section-heading heading-actions">
           <div>
             <span class="section-number">02</span>
@@ -95,103 +95,102 @@
           </div>
         </div>
 
-        <div class="tuning-pages">
-        <div class="tuning-page slider-grid" data-page="0">
-          <article class="slider-card" data-slider="highpass-hz">
+        <div class="tuning-page slider-grid">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="highpass.title">低频隆隆声切除</h3><code>--highpass-hz</code></div>
               <output for="highpass-hz"><span>28</span> Hz</output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="highpass.purpose">过滤直流偏移、风噪和唱机产生的极低频震动。</span></p>
             <div class="range-wrap">
-              <input id="highpass-hz" name="highpass_hz" type="range" min="1" max="500" step="1" value="28" data-default="28" data-unit="Hz">
+              <input id="highpass-hz" name="highpass_hz" type="range" min="1" max="500" step="1" value="28" data-default="28">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="highpass.lower">保留更多低频，声音更厚</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="highpass.higher">隆隆声更少，但可能变薄</span></span></div>
           </article>
 
-          <article class="slider-card" data-slider="rnnoise-mix">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="rnnoise.title">主要人声降噪强度</h3><code>--rnnoise-mix</code></div>
               <output for="rnnoise-mix"><span>0.78</span></output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="rnnoise.purpose">控制 RNNoise 修复音与原音的混合比例，是最主要的降噪旋钮。</span></p>
             <div class="range-wrap">
-              <input id="rnnoise-mix" name="rnnoise_mix" type="range" min="-1" max="1" step="0.01" value="0.78" data-default="0.78" data-unit="">
+              <input id="rnnoise-mix" name="rnnoise_mix" type="range" min="-1" max="1" step="0.01" value="0.78" data-default="0.78">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="rnnoise.lower">原声细节更多，底噪也更多</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="rnnoise.higher">降噪更强，过高可能吞字</span></span></div>
           </article>
 
         </div>
-        <div class="tuning-page slider-grid" data-page="1" hidden>
+        <div class="tuning-page slider-grid" hidden>
 
-          <article class="slider-card" data-slider="afftdn-nr">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="afftdnNr.title">残余嘶声压低量</h3><code>--afftdn-nr</code></div>
               <output for="afftdn-nr"><span>14</span> dB</output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="afftdnNr.purpose">在 RNNoise 之后继续压低稳定的白噪声和磁带嘶声。</span></p>
             <div class="range-wrap">
-              <input id="afftdn-nr" name="afftdn_nr" type="range" min="0.01" max="97" step="0.01" value="14" data-default="14" data-unit="dB">
+              <input id="afftdn-nr" name="afftdn_nr" type="range" min="0.01" max="97" step="0.01" value="14" data-default="14">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="afftdnNr.lower">保留细节，也保留更多嘶声</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="afftdnNr.higher">嘶声更少，声音可能发闷</span></span></div>
           </article>
 
-          <article class="slider-card" data-slider="afftdn-nf">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="afftdnNf.title">噪声地板判断</h3><code>--afftdn-nf</code></div>
               <output for="afftdn-nf"><span>-50</span> dB</output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="afftdnNf.purpose">告诉 FFT 降噪器把多大的背景声当成需要处理的噪声。</span></p>
             <div class="range-wrap">
-              <input id="afftdn-nf" name="afftdn_nf" type="range" min="-80" max="-20" step="1" value="-50" data-default="-50" data-unit="dB">
+              <input id="afftdn-nf" name="afftdn_nf" type="range" min="-80" max="-20" step="1" value="-50" data-default="-50">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="afftdnNf.lower">更保守，较少误伤语音</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="afftdnNf.higher">更激进，会处理更响的底噪</span></span></div>
           </article>
 
         </div>
-        <div class="tuning-page slider-grid" data-page="2" hidden>
+        <div class="tuning-page slider-grid" hidden>
 
-          <article class="slider-card" data-slider="treble-gain">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="trebleGain.title">高频明暗</h3><code>--treble-gain</code></div>
               <output for="treble-gain"><span>-2.5</span> dB</output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="trebleGain.purpose">柔化尖锐的高频，也可以补回空气感和齿音清晰度。</span></p>
             <div class="range-wrap">
-              <input id="treble-gain" name="treble_gain" type="range" min="-20" max="20" step="0.1" value="-2.5" data-default="-2.5" data-unit="dB">
+              <input id="treble-gain" name="treble_gain" type="range" min="-20" max="20" step="0.1" value="-2.5" data-default="-2.5">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="trebleGain.lower">更暗、更柔和</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="trebleGain.higher">更明亮，也更容易刺耳</span></span></div>
           </article>
 
-          <article class="slider-card" data-slider="treble-hz">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="trebleHz.title">高频调整起点</h3><code>--treble-hz</code></div>
               <output for="treble-hz"><span>7000</span> Hz</output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="trebleHz.purpose">决定从哪个频率附近开始进行高频明暗调整。</span></p>
             <div class="range-wrap">
-              <input id="treble-hz" name="treble_hz" type="range" min="1000" max="16000" step="100" value="7000" data-default="7000" data-unit="Hz">
+              <input id="treble-hz" name="treble_hz" type="range" min="1000" max="16000" step="100" value="7000" data-default="7000">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="trebleHz.lower">影响更宽的中高频区域</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="trebleHz.higher">只调整最顶部空气感</span></span></div>
           </article>
 
         </div>
-        <div class="tuning-page slider-grid" data-page="3" hidden>
+        <div class="tuning-page slider-grid" hidden>
 
-          <article class="slider-card" data-slider="treble-width">
+          <article class="slider-card">
             <div class="slider-title">
               <div><h3 data-i18n="trebleWidth.title">高频过渡宽度</h3><code>--treble-width</code></div>
               <output for="treble-width"><span>0.6</span></output>
             </div>
             <p class="purpose"><strong data-i18n="common.purpose">用途：</strong><span data-i18n="trebleWidth.purpose">控制高频搁架从原声过渡到目标增益时的影响宽度。</span></p>
             <div class="range-wrap">
-              <input id="treble-width" name="treble_width" type="range" min="0.01" max="5" step="0.01" value="0.6" data-default="0.6" data-unit="">
+              <input id="treble-width" name="treble_width" type="range" min="0.01" max="5" step="0.01" value="0.6" data-default="0.6">
               <span class="default-marker" aria-hidden="true" data-label="默认"></span>
             </div>
             <div class="range-effects"><span><b data-i18n="common.lower">越小</b> <span data-i18n="trebleWidth.lower">变化更陡、更局部</span></span><span><b data-i18n="common.higher">越大</b> <span data-i18n="trebleWidth.higher">过渡更宽、更柔和</span></span></div>
@@ -211,7 +210,6 @@
               <span class="switch" aria-hidden="true"></span>
             </label>
           </article>
-        </div>
         </div>
       </section>
     </form>

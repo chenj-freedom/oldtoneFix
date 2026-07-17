@@ -63,16 +63,11 @@ function applyTranslations() {
   });
 }
 
-function statusLabel(state) {
-  if (state === "running") return t("status.running");
-  return t(`status.${state}`);
-}
-
 function setStatus(state, key = null) {
   currentStatus = state;
   currentStatusKey = key;
   jobStatus.dataset.state = state;
-  jobStatus.textContent = key ? t(key) : statusLabel(state);
+  jobStatus.textContent = t(key || `status.${state}`);
   const running = state === "running";
   startButton.disabled = running;
   stopButton.disabled = !running;
@@ -101,9 +96,12 @@ function setLanguage(language) {
   });
   applyTranslations();
   renderHealth();
-  setStatus(currentStatus, currentStatusKey);
-  renderProgress(lastProgress);
-  if (lastJob) renderJob(lastJob);
+  if (lastJob) {
+    renderJob(lastJob);
+  } else {
+    setStatus(currentStatus, currentStatusKey);
+    renderProgress(lastProgress);
+  }
 }
 
 function renderProgress(progress = {}) {

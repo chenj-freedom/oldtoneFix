@@ -98,13 +98,13 @@ def _number_text(value):
     return f"{value:g}" if isinstance(value, float) else str(value)
 
 
-def build_denoise_command(payload, script=None):
+def build_denoise_command(payload):
     """Build the existing CLI command for a validated browser request."""
     values = validate_job_payload(payload)
     command = [
         sys.executable,
         "-u",
-        str(Path(script) if script is not None else DENOISE_SCRIPT),
+        str(DENOISE_SCRIPT),
         "--input",
         values["input"],
         "--progress-json",
@@ -154,7 +154,6 @@ def snapshot_job(job_id):
             "return_code": job["return_code"],
             "logs": list(job["logs"]),
             "command": list(job["command"]),
-            "payload": dict(job["payload"]),
             "error": job["error"],
             "progress": dict(job["progress"]),
         }
@@ -171,14 +170,6 @@ def _finish_job(job_id, status, return_code=None, error=None):
         job["return_code"] = return_code
         job["error"] = error
         job["process"] = None
-
-
-def build_subprocess_env(base_env=None):
-    environment = dict(os.environ if base_env is None else base_env)
-    environment["PYTHONIOENCODING"] = "utf-8"
-    environment["PYTHONUTF8"] = "1"
-    environment["PYTHONUNBUFFERED"] = "1"
-    return environment
 
 
 def parse_progress_event(line):
@@ -215,7 +206,12 @@ def run_job(job_id, command):
         process = subprocess.Popen(
             command,
             cwd=str(REPO_ROOT),
-            env=build_subprocess_env(),
+            env={
+                **os.environ,
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONUTF8": "1",
+                "PYTHONUNBUFFERED": "1",
+            },
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -253,8 +249,7 @@ def run_job(job_id, command):
 
 
 def create_job(payload, start_thread=True):
-    values = validate_job_payload(payload)
-    command = build_denoise_command(values)
+    command = build_denoise_command(payload)
     job_id = uuid.uuid4().hex
     with JOBS_LOCK:
         JOBS[job_id] = {
@@ -262,7 +257,6 @@ def create_job(payload, start_thread=True):
             "return_code": None,
             "logs": [],
             "command": command,
-            "payload": values,
             "error": None,
             "process": None,
             "stop_requested": False,

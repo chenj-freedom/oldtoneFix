@@ -33,7 +33,7 @@
 
 ## Browser UI
 
-The recommended local browser UI exposes every tuning value as a slider with its validated default position, current value, purpose, and clear lower/higher audible effects. Batch jobs show real-time progress, completed-file counts, and per-file logs. Use the `中文 / EN` switch in the upper-right corner at any time; the browser remembers the selected language and switching never interrupts the current task.
+The recommended local browser UI exposes every tuning value as a slider with its validated default position, current value, purpose, and clear lower/higher audible effects. Batch jobs show real-time progress, completed-file counts, and per-file logs.
 
 Windows:
 

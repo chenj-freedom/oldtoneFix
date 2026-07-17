@@ -106,13 +106,6 @@ def find_audio_files(input_path: Path, output_root: Path | None) -> list[Path]:
     return sorted(selected)
 
 
-def resolve_output_root(_input_path: Path, requested: Path | None) -> Path | None:
-    """Return the requested output directory, or None to write beside each source."""
-    if requested is not None:
-        return requested.resolve()
-    return None
-
-
 def destination_for(
     input_path: Path, source: Path, output_root: Path | None
 ) -> Path:
@@ -399,7 +392,7 @@ def run(
 ) -> int:
     """Process all selected files and return a shell-friendly exit code."""
     input_path = input_path.resolve()
-    output_root = resolve_output_root(input_path, output_root)
+    output_root = output_root.resolve() if output_root is not None else None
     try:
         sources = find_audio_files(input_path, output_root)
     except (FileNotFoundError, ValueError) as error:

@@ -19,7 +19,6 @@ from scripts import oldtonefix as denoise
 
 class PureFunctionTests(unittest.TestCase):
     def test_build_filter_chain_uses_arnndn_and_afftdn(self):
-        self.assertTrue(hasattr(denoise, "build_filter_chain"))
         chain = denoise.build_filter_chain()
         self.assertIn("highpass=f=28", chain)
         self.assertIn("arnndn=m=", chain)
@@ -50,7 +49,6 @@ class PureFunctionTests(unittest.TestCase):
         self.assertIn("treble=g=-1:f=8000:w=1", chain)
 
     def test_find_audio_files_is_recursive_case_insensitive_and_excludes_output(self):
-        self.assertTrue(hasattr(denoise, "find_audio_files"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             output_root = root / "out"
@@ -88,16 +86,10 @@ class PureFunctionTests(unittest.TestCase):
             self.assertEqual(denoise.find_audio_files(input_root, input_root), [source])
 
     def test_output_paths_follow_output_directory_naming_rules(self):
-        self.assertTrue(hasattr(denoise, "resolve_output_root"))
-        self.assertTrue(hasattr(denoise, "destination_for"))
         input_root = Path("C:/input")
         source = input_root / "album" / "track.mp3"
         output_root = Path("C:/output")
 
-        self.assertIsNone(denoise.resolve_output_root(input_root, None))
-        self.assertEqual(
-            denoise.resolve_output_root(input_root, output_root), output_root.resolve()
-        )
         self.assertEqual(
             denoise.destination_for(input_root, source, None),
             (source.parent / "track_processed.mp3").resolve(),
@@ -124,7 +116,6 @@ class PureFunctionTests(unittest.TestCase):
         )
 
     def test_build_ffmpeg_command_uses_argument_list_metadata_and_output_codec(self):
-        self.assertTrue(hasattr(denoise, "build_ffmpeg_command"))
         source = Path("C:/含 空格/输入.mp3")
         temporary_output = Path("C:/含 空格/.输出.tmp.mp3")
 
@@ -154,7 +145,6 @@ class PureFunctionTests(unittest.TestCase):
 
 class ProcessFileTests(unittest.TestCase):
     def test_keep_existing_skips_output_without_running_ffmpeg(self):
-        self.assertTrue(hasattr(denoise, "process_file"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "source.mp3"
@@ -192,7 +182,6 @@ class ProcessFileTests(unittest.TestCase):
             self.assertEqual(destination.read_bytes(), b"replacement")
 
     def test_successful_process_atomically_publishes_temporary_output(self):
-        self.assertTrue(hasattr(denoise, "process_file"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "source.mp3"
@@ -212,7 +201,6 @@ class ProcessFileTests(unittest.TestCase):
             self.assertEqual(list(destination.parent.glob("*.tmp.mp3")), [])
 
     def test_failed_process_removes_partial_temporary_output(self):
-        self.assertTrue(hasattr(denoise, "process_file"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "source.mp3"
@@ -233,7 +221,6 @@ class ProcessFileTests(unittest.TestCase):
             self.assertEqual(list(root.glob("*.tmp.mp3")), [])
 
     def test_success_return_without_temporary_output_is_failure(self):
-        self.assertTrue(hasattr(denoise, "process_file"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "source.mp3"
@@ -273,11 +260,8 @@ class ProcessFileTests(unittest.TestCase):
 
 class CliTests(unittest.TestCase):
     def test_parse_args_defaults_to_replacing_existing_outputs(self):
-        self.assertTrue(hasattr(denoise, "parse_args"))
         arguments = denoise.parse_args(["-i", "input"])
-        self.assertTrue(hasattr(arguments, "keep_existing"))
         self.assertFalse(arguments.keep_existing)
-        self.assertFalse(hasattr(arguments, "mode"))
         defaults = denoise.DenoiseTune()
         self.assertEqual(denoise.tune_from_args(arguments), defaults)
 
@@ -361,7 +345,6 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(arguments.output, Path("output"))
 
     def test_run_reports_missing_input(self):
-        self.assertTrue(hasattr(denoise, "run"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             error_output = io.StringIO()
             with redirect_stderr(error_output):
@@ -384,7 +367,6 @@ class CliTests(unittest.TestCase):
         self.assertIn("no supported audio", error_output.getvalue())
 
     def test_default_output_writes_processed_beside_source(self):
-        self.assertTrue(hasattr(denoise, "run"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "source.mp3"
@@ -406,7 +388,6 @@ class CliTests(unittest.TestCase):
             self.assertEqual(destination.read_bytes(), b"processed")
 
     def test_run_rejects_output_that_would_replace_source(self):
-        self.assertTrue(hasattr(denoise, "run"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             source = root / "source.mp3"
@@ -423,7 +404,6 @@ class CliTests(unittest.TestCase):
         self.assertIn("source file", error_output.getvalue())
 
     def test_main_reports_unavailable_ffmpeg(self):
-        self.assertTrue(hasattr(denoise, "main"))
         error_output = io.StringIO()
         with patch("scripts.oldtonefix.shutil.which", return_value=None):
             with redirect_stderr(error_output):
@@ -485,7 +465,6 @@ class CliTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is required")
     def test_run_continues_after_one_real_ffmpeg_failure(self):
-        self.assertTrue(hasattr(denoise, "run"))
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             input_root = root / "input"
